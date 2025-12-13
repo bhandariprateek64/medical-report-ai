@@ -1,0 +1,7 @@
+const app = require('./src/app');
+const { PORT } = require('./src/config/env');
+
+app.listen(PORT, () => {
+    console.log(`Server is running on http://localhost:${PORT}`);
+    console.log(`Endpoint available at POST http://localhost:${PORT}/api/simplify-report`);
+});
