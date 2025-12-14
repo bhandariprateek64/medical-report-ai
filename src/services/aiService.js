@@ -23,7 +23,7 @@ async function analyzeMedicalText(rawText) {
        - If NO range is provided in the text, use STANDARD MEDICAL RANGES for the test to determine status (Low/High/Normal) and fill the "ref_range" field.
     
     4. EXPLAIN: Provide a list of short explanations for any abnormal results.
-    
+    5. GUARDRAIL: Set "hallucination_check" to true ONLY if no medical tests are found or the input is unintelligible.
     OUTPUT SCHEMA (JSON):
     {
       "tests": [
@@ -38,6 +38,7 @@ async function analyzeMedicalText(rawText) {
       "summary": "String",
       "explanations": ["String"],
       "normalization_confidence": Number
+      "hallucination_check": false
     }
 
     INPUT TEXT:
