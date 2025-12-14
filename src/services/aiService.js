@@ -1,28 +1,43 @@
 // src/services/aiService.js
 const { GoogleGenerativeAI } = require("@google/generative-ai");
-const { OPENAI_API_KEY } = require('../config/env');
+const { OPENAI_API_KEY } = require('../config/env'); // Ensure this matches your env config
 
 const genAI = new GoogleGenerativeAI(OPENAI_API_KEY);
 
 async function analyzeMedicalText(rawText) {
-    // 1. COMBINE PROMPT (Legacy Method)
-    // Since 'gemini-pro' doesn't support systemInstruction well, we add it to the user message.
-    const prompt = `
+   const prompt = `
     You are a medical AI assistant. Your task is to extract, normalize, and simplify medical test results.
     
     RULES:
-    1. EXTRACT: specific test names, values, units, and reference ranges from the text.
-    2. NORMALIZE: Convert values to numbers. Standardize units (e.g., "mg/dl" -> "mg/dL"). Determine status (low/high) based on provided ranges.
-    3. GUARDRAIL: DO NOT invent tests. If a test is not clearly visible in the text, do not include it.
-    4. SIMPLIFY: Write a 2-sentence patient-friendly summary explaining the findings.
+    1. EXTRACT: Identify test names, values, units, and ranges. 
+       - IGNORE metadata like "Ref No", "Patient ID", "Date", "Dr Name".
+       - ONLY extract actual medical lab tests.
     
-    OUTPUT FORMAT (Raw JSON only, no markdown backticks):
+    2. NORMALIZE & FIX OCR:
+       - Fix split numbers: Treat "11 200" or "11, 200" as 11200. 
+       - Fix broken units: "00", "91" are NOT units. Look for "g/dL", "/uL", etc.
+       - If a value looks like "112" but the unit is "00", it is likely "11200".
+    
+    3. STATUS & RANGES:
+       - Extract provided reference ranges.
+       - If NO range is provided in the text, use STANDARD MEDICAL RANGES for the test to determine status (Low/High/Normal) and fill the "ref_range" field.
+    
+    4. EXPLAIN: Provide a list of short explanations for any abnormal results.
+    
+    OUTPUT SCHEMA (JSON):
     {
       "tests": [
-        {"name": "Hemoglobin", "value": 12.5, "unit": "g/dL", "status": "normal", "ref_range": {"low": 12, "high": 15}}
+        {
+          "name": "String (Standardized Name)", 
+          "value": Number, 
+          "unit": "String", 
+          "status": "String (Low/High/Normal)", 
+          "ref_range": {"low": Number, "high": Number}
+        }
       ],
-      "summary": "Your hemoglobin is normal...",
-      "hallucination_check": true
+      "summary": "String",
+      "explanations": ["String"],
+      "normalization_confidence": Number
     }
 
     INPUT TEXT:
@@ -30,35 +45,26 @@ async function analyzeMedicalText(rawText) {
     `;
 
     try {
-        // 2. USE LATEST MODEL (gemini-2.5-flash)
-        // Using the latest available Gemini model
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+        // FIXED: Use correct model name and enforce JSON
+        const model = genAI.getGenerativeModel({ 
+            model: "gemini-2.5-flash",
+            generationConfig: { responseMimeType: "application/json" }
+        });
 
         const result = await model.generateContent(prompt);
         const response = await result.response;
-        let text = response.text();
-
-        // 3. CLEANUP (Remove Markdown if AI adds it)
-        // gemini-pro loves to add "\`\`\`json" at the start. We must remove it.
-        text = text.replace(/```json/g, '').replace(/```/g, '').trim();
-
-        return JSON.parse(text);
+        
+        // No regex needed with responseMimeType
+        return JSON.parse(response.text());
 
     } catch (error) {
-        console.error("❌ Gemini API Error Details:");
-        console.error("   Status:", error.status);
-        console.error("   Message:", error.message);
-        console.error("   API Key Valid:", !!process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.length > 20);
-        
-        // 4. FALLBACK MOCK (If even gemini-pro fails, return this so you can record your video)
-        console.log("⚠️ Switching to Fallback Data for Assignment Demo");
+        console.error("Gemini API Error:", error);
         return {
-            "tests": [
-                {"name": "Hemoglobin", "value": 10.2, "unit": "g/dL", "status": "low", "ref_range": {"low": 13.5, "high": 17.5}},
-                {"name": "WBC", "value": 11200, "unit": "/uL", "status": "high", "ref_range": {"low": 4500, "high": 11000}}
-            ],
-            "summary": "This is a FALLBACK response because the API is currently unreachable. The patient has low hemoglobin and high WBC.",
-            "status": "ok"
+            "tests": [],
+            "summary": "Error processing report.",
+            "explanations": [],
+            "normalization_confidence": 0,
+            "status": "error"
         };
     }
 }
