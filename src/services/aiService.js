@@ -30,8 +30,9 @@ async function analyzeMedicalText(rawText) {
     `;
 
     try {
-        // 2. USE STABLE MODEL (gemini-pro)
-        const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+        // 2. USE LATEST MODEL (gemini-2.5-flash)
+        // Using the latest available Gemini model
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
         const result = await model.generateContent(prompt);
         const response = await result.response;
@@ -44,7 +45,10 @@ async function analyzeMedicalText(rawText) {
         return JSON.parse(text);
 
     } catch (error) {
-        console.error("Gemini Legacy Error:", error);
+        console.error("❌ Gemini API Error Details:");
+        console.error("   Status:", error.status);
+        console.error("   Message:", error.message);
+        console.error("   API Key Valid:", !!process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.length > 20);
         
         // 4. FALLBACK MOCK (If even gemini-pro fails, return this so you can record your video)
         console.log("⚠️ Switching to Fallback Data for Assignment Demo");
