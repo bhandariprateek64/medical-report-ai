@@ -1,10 +1,18 @@
 // src/services/aiService.js
-const { GoogleGenerativeAI } = require("@google/generative-ai");
-const { OPENAI_API_KEY } = require('../config/env'); // Ensure this matches your env config
+// This service handles AI-powered medical text analysis using Google's Generative AI
+// It extracts lab test results, normalizes values, and provides patient-friendly summaries
 
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { OPENAI_API_KEY } = require('../config/env');
+
+// Initialize the Generative AI client with our API key
 const genAI = new GoogleGenerativeAI(OPENAI_API_KEY);
 
+// Main function to analyze medical text and extract structured data
+// Takes raw medical report text as input and returns organized test data
 async function analyzeMedicalText(rawText) {
+   // Comprehensive prompt that instructs the AI how to process medical reports
+   // Includes rules for extraction, normalization, OCR fixing, and safety checks
    const prompt = `
     You are a medical AI assistant. Your task is to extract, normalize, and simplify medical test results.
     
@@ -46,20 +54,25 @@ async function analyzeMedicalText(rawText) {
     `;
 
     try {
-        // FIXED: Use correct model name and enforce JSON
+        // Use the latest Gemini model with JSON response format enforcement
+        // This ensures the AI returns properly formatted JSON we can parse reliably
         const model = genAI.getGenerativeModel({ 
             model: "gemini-2.5-flash",
             generationConfig: { responseMimeType: "application/json" }
         });
 
+        // Send prompt to AI and get response
         const result = await model.generateContent(prompt);
         const response = await result.response;
         
-        // No regex needed with responseMimeType
+        // Parse and return the JSON response
+        // With responseMimeType set to JSON, we don't need regex cleanup
         return JSON.parse(response.text());
 
     } catch (error) {
+        // Log error details for debugging
         console.error("Gemini API Error:", error);
+        // Return empty results on error (safer than hallucinated data)
         return {
             "tests": [],
             "summary": "Error processing report.",
